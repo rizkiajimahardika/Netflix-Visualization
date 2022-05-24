@@ -1,0 +1,248 @@
+---
+title: "Data Visualization - Netflix"
+author: "Rizki Aji Mahardika"
+date: "5/2/2022"
+output: 
+  html_document :
+    number_sections: true
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: false
+    df_print: paged
+    theme: united
+    highlight: breezedark
+  pdf_document:
+    latex_engine: xelatex
+
+
+---
+```{r echo=FALSE, out.width = "30%"}
+knitr::include_graphics("data/netflix_picture.jpg")
+```
+
+
+# Intro
+
+In this project, we will analyze data from Kaggle, namely Netflix data. Netflix is one of the most popular media and video streaming platforms. They have over 8000 movies or tv shows available on their platform, as of mid-2021, they have over 200M Subscribers globally. After we finish analyzing Netflix data, then we will visualize based on the results of the analysis that has been done.
+
+## Input Data
+
+First, we need to read data
+```{r}
+netflix <- read.csv("data/netflix.csv")
+```
+
+Then, we want to see top 10 data owned by Netflix
+```{r}
+head(netflix,10)
+```
+
+Next, we want to know dimension of data
+```{r}
+dim(netflix)
+```
+This data contains 8807 rows and 12 columns
+
+
+# Data Cleansing
+The first step in conducting data analysis is to ensure that the data to be used is clean.
+
+## Load Libraries
+First, we need to load required libraries
+```{r}
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(ggplot2)
+```
+
+## Explicit Coercion
+Next, we need to check data types in every column
+```{r}
+str(netflix)
+```
+Based on data type for each column above, there is an incorrect data type. Therefore, we have to change the data type
+```{r}
+netflix$type <- as.factor(netflix$type)
+netflix$date_added <- mdy(netflix$date_added)
+netflix$release_year <- parse_date_time(netflix$release_year,'y')
+```
+
+## Check Missing Values
+```{r}
+colSums(is.na(netflix))
+```
+We have missing values in column date_added, we will do action on NA and convert it to string "Missing Values"
+
+```{r}
+netflix$director[netflix$director==""] <- NA
+netflix$cast[netflix$cast==""] <- NA
+netflix$country[netflix$country==""] <- NA
+netflix$rating[netflix$rating==""] <- NA
+```
+
+```{r}
+netflix$director[which(is.na(netflix$director))] <- "Missing Values"
+netflix$cast[which(is.na(netflix$cast))] <- "Missing Values"
+netflix$country[which(is.na(netflix$country))] <- "Missing Values"
+netflix$date_added[which(is.na(netflix$date_added))] <- "01-01-01" #because the date_added column has a date data type
+netflix$rating[which(is.na(netflix$rating))] <- "Missing Values"
+colSums(is.na(netflix))
+```
+Great! We don’t have missing values.
+
+## Finishing Data Cleansing
+First, we recheck data again.
+```{r}
+head(netflix,10)
+```
+
+Next step, we want to retrieve the data needed to perform data analysis, i.e. data that is not from 
+
+```{r}
+netflix <- netflix %>% select(,c(-"show_id",-"director",-"cast",-"country",-"description"))
+head(netflix,10)
+```
+
+
+we want to take the first category from listed_in columns
+```{r}
+netflix <- netflix %>% separate(listed_in, c("category", "category2", "category3"), sep = ",") 
+netflix <- netflix %>% select(c(-"category2", -"category3"))
+head(netflix,10)
+```
+
+Finally, we want to create a new column, namely year added and month added from date_added column
+
+```{r}
+netflix$year_added <- year(netflix$date_added)
+netflix$month_added <- month(netflix$date_added,label=T)
+head(netflix,10)
+```
+Data cleaning has been completed and is ready to be used for analysis and visualization
+
+
+# Data Explanation
+```{r}
+summary(netflix)
+```
+1. In column type in Netflix data, Movie has 6131 titles and TV show have 2676 titles
+2. In this data used, the last data entered in Netflix is September 25th, 2021
+3. The year of release of Movie/TV Show on Netflix is in the range 1925 - 2021
+4. The maximum year for Movie/TV Show added by Netflix is 2021
+5. Netflix most often added Movie/TV Show in July, December, and September
+
+
+# Study Case
+
+1.Show comparison between type of Movie or type of TV Show by year of release
+
+```{r,warning=FALSE,message=FALSE}
+ggplot(netflix, mapping = aes(x=release_year, fill = type)) +
+  geom_histogram()+
+  labs(title="Netflix Films Released by Year", x="Release Year", y="Total Film")+
+  scale_fill_manual(values = c("Movie" = "Red","TV Show" = "Black"))+
+  theme_minimal()+
+  theme(plot.title = element_text(face="bold",hjust = 0.5))
+```
+
+
+**Answer : Movie and TV Show tend to have an increasing trend every year. Movie outperform every year than TV shows. However, TV show also have a significant increasing trend from 2000 to 2021.**
+
+
+
+2. What categories are included in the top 10 categories on Netflix
+```{r}
+top_categories <- netflix %>% group_by(category) %>% count() %>% arrange(desc(n))
+top10_categories <- top_categories %>% filter(n>270)
+
+top10_categories
+```
+```{r}
+ggplot(top10_categories,mapping=aes(x=n, reorder(category,n)))+
+  geom_col(aes(fill=n),color = "maroon",show.legend = F)+
+  scale_fill_gradient(low="pink",high="#cf2e2e")+
+  labs(title = "Netflix's Top 10 Categories", x = "Total Film", y = NULL)+
+  theme_minimal()+
+  theme(plot.title=element_text(face="bold", hjust = 0.5))+
+  geom_label(data=top10_categories[1:5,], mapping=aes(label=n))+
+  geom_vline(xintercept = mean(top10_categories$n), col="yellow",linetype=2,lwd=1)
+```
+
+
+**Answer : The plot above is a visualization of the top 10 categories on Netflix. There is a yellow line indicating the average of the categories. There are 5 categories that exceed the average, namely the category Dramas, Comedies, Action & Adventure, Documentaries, International TV Shows**
+
+
+
+
+3. What ratings are included in the top 10 categories on Netflix
+```{r}
+top_ratings <- netflix %>% group_by(rating) %>% count() %>% arrange(desc(n))
+top10_ratings <- top_ratings %>% filter(n>50)
+
+top10_ratings
+```
+```{r}
+ggplot(data = top10_ratings, mapping=aes(x=n,y=reorder(rating,n)))+
+  geom_col(aes(fill=n), color="black", show.legend = F)+
+  scale_fill_gradient(low="#79DAE8",high="#0AA1DD")+
+  labs(title="Netflix's Top 10 Ratings", x = "Total Film", y= NULL)+
+  theme_minimal()+
+  theme(plot.title = element_text(face="bold",hjust=0.5))+
+  geom_label(data = top10_ratings[1:2,], mapping=aes(label=n))+
+  geom_vline(xintercept = mean(top10_ratings$n), col = "#FCF69C",linetype=2,lwd=1)
+```
+
+
+**Answer : The plot above is a visualization of the top 10 ratings on Netflix. There is a yellow line indicating the average of ratings. There are two ratings that exceed the average, namely the rating TV-MA and TV-14**
+
+
+
+4. What month does Netflix add the most films?
+
+```{r}
+netflix %>% group_by(month_added,type)%>% 
+  count() %>% 
+  ggplot(aes(x=month_added,y=n,fill=type))+
+  geom_col(aes(fill=type))+
+  labs(title="Netflix Films Added by Month", x="Month", y="Total Film")+
+  theme_minimal()+
+  theme(plot.title=element_text(face="bold",hjust=0.5))
+
+
+```
+
+
+**Answer : From the plot above, trend type Movies are higher than trend type TV Shows. Then, the month that Netflix adds films most often are July, September, and December**
+
+
+
+
+5. Show the trend of the duration of type movies from 2000 to 2020
+```{r,warning=FALSE,message=FALSE}
+netflix %>% 
+  filter(type=='Movie' & release_year>="2000-01-01" & release_year<="2020-01-02") %>% 
+  mutate(movie_duration=substr(duration,1,nchar(as.character(duration))-4)) %>% 
+  mutate(movie_duration = as.integer(movie_duration)) %>% 
+  group_by(release_year) %>% 
+  summarise(avg_duration = mean(movie_duration)) %>% 
+  ggplot(aes(x=release_year, y= avg_duration))+
+  geom_point() + geom_smooth()+
+  labs(title = "Netflix movie duration from 2000 - 2020", x = "Year", y = "Duration(Minutes)")+
+  theme_minimal()+
+  theme(plot.title=element_text(face="bold",hjust=0.5))
+```
+
+
+**Answer : The plot above shows that the duration of movies from 2000 to 2020 has a downward trend.**
+
+
+
+
+
+
+# Final Conclusion
+From the analysis and visualization that has been done, it can be concluded that movies and tv shows increase every year. Movies outperform every year than TV shows. However, TV shows also have a significant increasing trend from 2000 to 2021. Then, the most popular categories on Netflix are Dramas, Comedies, and Action & Adventure categories.
+
+Then two ratings exceed the average rating, namely the rating TV-MA and TV-14. Trend type Movies are higher than the trend type TV Shows. The month that Netflix adds films most often are July, September, and December. Finally, the duration of movies from 2000 to 2020 has a downward trend.
